@@ -1,0 +1,23 @@
+{
+  "name": "nand2tetris",
+  "version": "1.0.0",
+  "description": "Nand to Tetris project solutions",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MlkMahmud/nand2tetris.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MlkMahmud/nand2tetris/issues"
+  },
+  "homepage": "https://github.com/MlkMahmud/nand2tetris#readme",
+  "devDependencies": {
+    "jest": "^28.1.0"
+  }
+}
