@@ -4,7 +4,8 @@
   "description": "Nand to Tetris project solutions",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "start:assembler": "./06/index.js"
   },
   "repository": {
     "type": "git",
