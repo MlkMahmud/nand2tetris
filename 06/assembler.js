@@ -10,7 +10,7 @@ const {
 
 const AInstruction = /^@\s*(?<value>\w+([.$]\w+)*)(\s+\/\/([\w\W])*)?$/;
 const Comment = /^\/\/([\w\W])*$/;
-const DInstructionWithDest = /^(?<dest>A(D|M|DM|MD)?|M(A|D|AD|DA)?|D(A|M|AM|MA)?)\s*=\s*(?<leftOp>(!?[AMD])|0|1|-1)\s*((?<op>[\-+|&])\s*(?<rightOp>[1AMD]))?(\s*;\s*(?<jmp>J(LT|EQ|NE|GT|LE|GE|MP)))?(\s+\/\/([\w\W])*)?$/;
+const DInstructionWithDest = /^(?<dest>A(D|M|DM|MD)?|M(A|D|AD|DA)?|D(A|M|AM|MA)?)\s*=\s*((?<comp>(0|-?[1ADM])|(!?[ADM]))|(?<leftOp>[AMD])\s*(?<op>[\-+|&])\s*(?<rightOp>[1AMD]))?(\s*;\s*(?<jmp>J(LT|EQ|NE|GT|LE|GE|MP)))?(\s+\/\/([\w\W])*)?$/;
 const DInstructionNoDest = /^((?<comp>(0|-?[1ADM])|(!?[ADM]))|((?<leftOp>A|D|M)\s*(?<op>[\-+|&])\s*(?<rightOp>[1AMD])))(\s*;\s*(?<jmp>J(LT|EQ|NE|GT|LE|GE|MP)))(\s+\/\/([\w\W])*)?$/;
 const LabelDeclaration = /^\(\s*(?<label>\w+([.$]\w+)*)\s*\)(\s+\/\/([\w\W])*)?$/;
 
@@ -45,9 +45,9 @@ module.exports = class Assembler {
       token.value = match.groups.value.trim();
     } else if (line.match(DInstructionWithDest)) {
       const match = line.match(DInstructionWithDest);
-      const { dest, leftOp, op = '', rightOp = '', jmp = 'NONE' } = match.groups;
+      const { comp, dest, leftOp, op = '', rightOp = '', jmp = 'NONE' } = match.groups;
       token.type = TOKEN_TYPES.D_INSTRUCTION;
-      token.value = { comp: `${leftOp}${op}${rightOp}`, dest, jmp };
+      token.value = { comp: comp || `${leftOp}${op}${rightOp}`, dest, jmp };
     } else if (line.match(DInstructionNoDest)) {
       const match = line.match(DInstructionNoDest);
       const { comp, jmp, leftOp, op, rightOp, } = match.groups;
