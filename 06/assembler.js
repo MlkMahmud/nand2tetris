@@ -84,7 +84,7 @@ module.exports = class Assembler {
               break;
             }
             default:
-              reject(new SyntaxError(`Invalid expression at line ${lineNum}`));
+              reject(new SyntaxError(`Invalid expression "${line}" at line ${lineNum}`));
           }
         }
       });
@@ -127,6 +127,7 @@ module.exports = class Assembler {
     });
 
     return new Promise((resolve, reject) => {
+      let closed = false;
       reader.on('line', (input) => {
         const line = input.trim();
         if (line) {
@@ -135,11 +136,16 @@ module.exports = class Assembler {
             const instruction = this.#decodeToken(token, memory);
             writeStream.write(`${instruction}\n`, (err) => {
               if (err) reject(err);
+              if (closed) {
+                resolve();
+              }
             });
           }
         }
       });
-      reader.on('close', () => resolve());
+      reader.on('close', () => {
+        closed = true;
+      });
     });
   }
 }
