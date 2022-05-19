@@ -3,9 +3,9 @@ const readline = require('readline');
 
 const comment = /^\/\/.*$/;
 const popCommand =
-  /^pop\s+(?<segment>argument|local|this|that|temp|static)\s+(?<index>\d+)(\s+\/\/.*)?$/;
+  /^pop\s+((?<segment>argument|local|this|that|temp|static)\s+(?<index>\d+)|pointer\s+(?<pointer>[01]))(\s+\/\/.*)?$/;
 const pushCommand =
-  /^push\s+(?<segment>constant|argument|local|this|that|temp|static)\s+(?<index>\d+)(\s+\/\/.*)?$/;
+  /^push\s+((?<segment>constant|argument|local|this|that|temp|static)\s+(?<index>\d+)|pointer\s+(?<pointer>[01]))(\s+\/\/.*)?$/;
 const arithmeticCommand = /^(?<op>add|sub|neg|eq|or|not|and|lt)(\s+\/\/.*)?$/;
 
 const COMMANDS = {
@@ -36,22 +36,18 @@ module.exports = class Translator {
       const match = line.match(arithmeticCommand);
       const { op } = match.groups;
       const symbol = this.symbols.get(op);
-      if (['neg'].includes(op)) {
-        token.value = { args: 1, symbol };
-      } else {
-        token.value = { args: 2, symbol };
-      }
+      token.value = { symbol };
       token.type = COMMANDS.ARITHMETIC;
     } else if (line.match(pushCommand)) {
       const match = line.match(pushCommand);
-      const { segment, index } = match.groups;
+      const { segment, index, pointer } = match.groups;
       token.type = COMMANDS.PUSH;
-      token.value = { index, segment };
+      token.value = { index, pointer, segment };
     } else if (line.match(popCommand)) {
       const match = line.match(popCommand);
-      const { segment, index } = match.groups;
+      const { segment, index, pointer } = match.groups;
       token.type = COMMANDS.POP;
-      token.value = { index, segment };
+      token.value = { index, segment, pointer };
     } else if (line.match(comment)) {
       token.type = COMMANDS.COMMENT;
     } else {
@@ -64,37 +60,45 @@ module.exports = class Translator {
     switch (token.type) {
       case COMMANDS.PUSH: {
         let code = '';
-        const { index, segment } = token.value;
-        const symbol = this.symbols.get(segment);
-        if (segment === 'constant') {
-          code = `@${index}\nD=A\n${symbol}\nM=M+1\nA=M-1\nM=D\n\n`;
-        } else if (['local', 'argument', 'this', 'that'].includes(segment)) {
-          code = `${symbol}\nD=M\n@${index}\nA=D+A\nD=M\n@SP\nM=M+1\nA=M-1\nM=D\n\n`;
-        } else {
-          const addr = String(symbol + Number(index));
+        const { index = 0, segment, pointer } = token.value;
+        let symbol = this.symbols.get(segment);
 
+        if(pointer) {
+          symbol = pointer === '0' ? '@R3' : '@R4';
+          code = `${symbol}\nD=M\n@SP\nM=M+1\nA=M-1\nM=D\n\n`;
+        } else if (segment === 'constant') {
+          code = `@${index}\nD=A\n${symbol}\nM=M+1\nA=M-1\nM=D\n\n`;
+        } else if (['static', 'temp'].includes(segment)) {
+          const addr = String(symbol + Number(index));
           code = `@${addr}\nD=M\n@SP\nM=M+1\nA=M-1\nM=D\n\n`;
+        } else {
+          code = `${symbol}\nD=M\n@${index}\nA=D+A\nD=M\n@SP\nM=M+1\nA=M-1\nM=D\n\n`;
         }
         return code;
       }
 
       case COMMANDS.POP: {
         let code = '';
-        const { index, segment } = token.value;
-        const symbol = this.symbols.get(segment);
-        if (['local', 'argument', 'this', 'that'].includes(segment)) {
-          code = `${symbol}\nD=M\n@${index}\nD=D+A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`;
-        } else {
+        const { index = 0, segment, pointer } = token.value;
+        let symbol = this.symbols.get(segment);
+
+        if(pointer) {
+          symbol = pointer === '0' ? '@R3' : '@R4';
+          code = `@SP\nM=M-1\nA=M\nD=M\n${symbol}\nM=D\n\n`;
+        } else if (['static', 'temp'].includes(segment)) {
           const addr = String(symbol + Number(index));
-          code = `@${addr}\nD=A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`;
+          code = `@${addr}\nD=A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`; 
+        } else {
+          code = `${symbol}\nD=M\n@${index}\nD=D+A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`;
         }
         return code;
       }
 
       case COMMANDS.ARITHMETIC: {
         let code = '';
-        const { symbol, args } = token.value;
-        if (args === 1) {
+        const { symbol } = token.value;
+        // single operand operators
+        if (['!'].includes(symbol)) { 
           code = `@SP\nA=M-1\nM=${symbol}M\n\n`;
         } else {
           code = `@SP\nM=M-1\nA=M\nD=M\nA=A-1\nD=M${symbol}D\nM=D\n\n`
