@@ -6,7 +6,8 @@ const popCommand =
   /^pop\s+((?<segment>argument|local|this|that|temp|static)\s+(?<index>\d+)|pointer\s+(?<pointer>[01]))(\s+\/\/.*)?$/;
 const pushCommand =
   /^push\s+((?<segment>constant|argument|local|this|that|temp|static)\s+(?<index>\d+)|pointer\s+(?<pointer>[01]))(\s+\/\/.*)?$/;
-const arithmeticCommand = /^(?<op>add|sub|neg|eq|or|not|and|lt)(\s+\/\/.*)?$/;
+const arithmeticCommand =
+  /^(?<op>add|sub|neg|eq|or|not|and|lt|gt)(\s+\/\/.*)?$/;
 
 const COMMANDS = {
   ARITHMETIC: 'ARITHMETIC',
@@ -26,7 +27,13 @@ module.exports = class Translator {
     ['temp', 5],
     ['add', '+'],
     ['sub', '-'],
-    ['neg', '!'],
+    ['neg', '-'],
+    ['not', '!'],
+    ['or', '|'],
+    ['and', '&'],
+    ['lt', 'LT'],
+    ['gt', 'GT'],
+    ['eq', 'EQ'],
   ]);
 
   #parse(line, lineNum) {
@@ -35,8 +42,7 @@ module.exports = class Translator {
     if (line.match(arithmeticCommand)) {
       const match = line.match(arithmeticCommand);
       const { op } = match.groups;
-      const symbol = this.symbols.get(op);
-      token.value = { symbol };
+      token.value = { op, line: lineNum };
       token.type = COMMANDS.ARITHMETIC;
     } else if (line.match(pushCommand)) {
       const match = line.match(pushCommand);
@@ -63,7 +69,7 @@ module.exports = class Translator {
         const { index = 0, segment, pointer } = token.value;
         let symbol = this.symbols.get(segment);
 
-        if(pointer) {
+        if (pointer) {
           symbol = pointer === '0' ? '@R3' : '@R4';
           code = `${symbol}\nD=M\n@SP\nM=M+1\nA=M-1\nM=D\n\n`;
         } else if (segment === 'constant') {
@@ -82,12 +88,12 @@ module.exports = class Translator {
         const { index = 0, segment, pointer } = token.value;
         let symbol = this.symbols.get(segment);
 
-        if(pointer) {
+        if (pointer) {
           symbol = pointer === '0' ? '@R3' : '@R4';
           code = `@SP\nM=M-1\nA=M\nD=M\n${symbol}\nM=D\n\n`;
         } else if (['static', 'temp'].includes(segment)) {
           const addr = String(symbol + Number(index));
-          code = `@${addr}\nD=A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`; 
+          code = `@${addr}\nD=A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`;
         } else {
           code = `${symbol}\nD=M\n@${index}\nD=D+A\n@R13\nM=D\n@SP\nM=M-1\nA=M\nD=M\n@R13\nA=M\nM=D\n\n`;
         }
@@ -96,14 +102,18 @@ module.exports = class Translator {
 
       case COMMANDS.ARITHMETIC: {
         let code = '';
-        const { symbol } = token.value;
+        const { op, line } = token.value;
+        const symbol = this.symbols.get(op);
         // single operand operators
-        if (['!'].includes(symbol)) { 
+        if (['neg', 'not'].includes(op)) {
           code = `@SP\nA=M-1\nM=${symbol}M\n\n`;
+        } else if (['LT', 'EQ', 'GT'].includes(symbol)) {
+          const label = `${symbol}_${line}`;
+          code = `@SP\nM=M-1\nA=M\nD=M\nA=A-1\nD=M-D\n@${label}\nD;J${symbol}\n@N${label}\n0;JMP\n(${label})\n@SP\nA=M-1\nM=-1\n@CONT_${line}\n0;JMP\n(N${label})\n@SP\nA=M-1\nM=0\n(CONT_${line})\n\n`;
         } else {
-          code = `@SP\nM=M-1\nA=M\nD=M\nA=A-1\nD=M${symbol}D\nM=D\n\n`
+          code = `@SP\nM=M-1\nA=M\nD=M\nA=A-1\nD=M${symbol}D\nM=D\n\n`;
         }
-        return code
+        return code;
       }
 
       default: {
@@ -113,7 +123,7 @@ module.exports = class Translator {
   }
 
   translate(srcFile) {
-    const outFile = srcFile.replace('.vm', '.asm')
+    const outFile = srcFile.replace('.vm', '.asm');
     const writeStream = fs.createWriteStream(outFile, { flags: 'w' });
     const reader = readline.createInterface({
       input: fs.createReadStream(srcFile),
