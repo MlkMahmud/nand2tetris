@@ -127,7 +127,6 @@ module.exports = class Assembler {
     });
 
     return new Promise((resolve, reject) => {
-      let closed = false;
       reader.on('line', (input) => {
         const line = input.trim();
         if (line) {
@@ -136,16 +135,12 @@ module.exports = class Assembler {
             const instruction = this.#decodeToken(token, memory);
             writeStream.write(`${instruction}\n`, (err) => {
               if (err) reject(err);
-              if (closed) {
-                resolve();
-              }
             });
           }
         }
       });
-      reader.on('close', () => {
-        closed = true;
-      });
+      writeStream.on('finish', () => resolve());
+      reader.on('close', () => writeStream.end());
     });
   }
 }
