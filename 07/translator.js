@@ -8,10 +8,14 @@ const pushCommand =
   /^push\s+((?<segment>constant|argument|local|this|that|temp|static)\s+(?<index>\d+)|pointer\s+(?<pointer>[01]))(\s+\/\/.*)?$/;
 const arithmeticCommand =
   /^(?<op>add|sub|neg|eq|or|not|and|lt|gt)(\s+\/\/.*)?$/;
+const gotoCmd = /^(?<cmd>goto|if-goto)\s+(?<label>\w+([.$]\w+)*)(\s+\/\/.*)?$/;
+const LabelDeclaration = /^label\s+(?<label>\w+([.$]\w+)*)(\s+\/\/.*)?$/;
 
 const COMMANDS = {
   ARITHMETIC: 'ARITHMETIC',
   COMMENT: 'COMMENT',
+  GO_TO: 'GO_TO',
+  LABEL: 'LABEL',
   POP: 'POP',
   PUSH: 'PUSH',
 };
@@ -56,6 +60,15 @@ module.exports = class Translator {
       token.value = { index, segment, pointer };
     } else if (line.match(comment)) {
       token.type = COMMANDS.COMMENT;
+    } else if (line.match(gotoCmd)) {
+      const match = line.match(gotoCmd);
+      const { cmd, label } = match.groups;
+      token.type = COMMANDS.GO_TO;
+      token.value = { cmd, label };
+    } else if (line.match(LabelDeclaration)) {
+      const match = line.match(LabelDeclaration);
+      token.type = COMMANDS.LABEL;
+      token.value = match.groups.label;
     } else {
       throw new SyntaxError(`Invalid expression "${line}" at line ${lineNum}`);
     }
@@ -115,6 +128,19 @@ module.exports = class Translator {
         }
         return code;
       }
+
+      case COMMANDS.GO_TO: {
+        const { cmd, label } = token.value;
+        if (cmd === 'goto') {
+          return `@${label}\n0;JMP\n\n`;
+        }
+        return `@SP\nM=M-1\nA=M\nD=M\n@${label}\nD;JNE\n\n`;
+       }
+
+       case COMMANDS.LABEL: {
+        const label = token.value;
+        return `(${label})\n`;
+       }
 
       default: {
         throw new TypeError(`Invalid token type: ${token.type}`);
